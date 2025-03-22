@@ -7,11 +7,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Telegram bot token
-const token = '7668277092:AAHduqzgcBig3eVJOHpgThyXqhCrXAL1N8Q';
-
-// AliExpress API credentials
-const appKey = '512082';
-const appSecret = '8ZR7b0XNh0DDSokcdW50ACF7yUCatSVY';
+const token = process.env.BOT_TOKEN;
 
 // Create a bot instance
 const bot = new TelegramBot(token, { polling: false });
@@ -39,11 +35,14 @@ async function fetchProductNameFromUrl(url) {
   }
 }
 
+// Middleware to parse JSON
+app.use(express.json());
+
 // Webhook endpoint for Telegram updates
-app.post(`/webhook/${token}`, express.json(), async (req, res) => {
+app.post(`/webhook`, async (req, res) => {
   try {
     const { message } = req.body;
-    
+
     if (!message || !message.text) {
       return res.sendStatus(200);
     }
@@ -54,17 +53,7 @@ app.post(`/webhook/${token}`, express.json(), async (req, res) => {
     // Check if the message contains an AliExpress link
     if (messageText.includes('aliexpress.com')) {
       try {
-        const productId = extractProductId(messageText);
-        
-        if (!productId) {
-          await bot.sendMessage(chatId, 'Invalid AliExpress link. Please send a valid product link.');
-          return res.sendStatus(200);
-        }
-
-        // Try the API first
-        const apiResponse = await axios.get(`https://api.aliexpress.com/v2/product/get?app_key=${appKey}&product_id=${productId}&sign_method=sha256&sign=${appSecret}`);
-        const productName = apiResponse.data?.product_name || await fetchProductNameFromUrl(messageText);
-        
+        const productName = await fetchProductNameFromUrl(messageText);
         await bot.sendMessage(chatId, `Product Name: ${productName}`);
       } catch (error) {
         console.error('Error fetching product:', error);
