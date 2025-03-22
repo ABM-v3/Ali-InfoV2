@@ -1,8 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -12,19 +11,28 @@ const webhookUrl = process.env.WEBHOOK_URL;
 const bot = new TelegramBot(token, { polling: false });
 
 /**
- * Function to extract product name from AliExpress product page
+ * Fetches product name from AliExpress using Puppeteer
  */
 async function getProductName(url) {
+    let browser;
     try {
-        const { data } = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' }
+        browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
-        const $ = cheerio.load(data);
-        const productName = $('title').text().replace('| AliExpress', '').trim();
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+        // Wait for product name to load
+        await page.waitForSelector('h1', { timeout: 5000 });
+
+        // Extract product name
+        const productName = await page.$eval('h1', el => el.innerText.trim());
         return productName || 'Product name not found';
     } catch (error) {
         console.error('Error fetching product name:', error);
         return 'Product name not found';
+    } finally {
+        if (browser) await browser.close();
     }
 }
 
