@@ -27,7 +27,12 @@ async function fetchProductNameFromUrl(url) {
       },
     });
     const $ = cheerio.load(response.data);
-    const productName = $('h1.product-title-text').text().trim();
+
+    // Try to find the product name in the HTML
+    const productName = $('h1.product-title-text').text().trim() || 
+                        $('h1.product-title').text().trim() || 
+                        $('title').text().trim();
+
     return productName || 'Product name not found';
   } catch (error) {
     console.error('Error scraping product:', error);
