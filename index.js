@@ -1,6 +1,7 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,8 +18,25 @@ const bot = new TelegramBot(token, { polling: false });
 
 // Helper function to extract product ID from AliExpress URL
 function extractProductId(url) {
-  const matches = url.match(/item\/(\d+)\.html/);
+  const matches = url.match(/(?:\/item\/|id=)(\d+)/);
   return matches ? matches[1] : null;
+}
+
+// Function to fetch product name from URL using web scraping
+async function fetchProductNameFromUrl(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+    });
+    const $ = cheerio.load(response.data);
+    const productName = $('h1.product-title-text').text().trim();
+    return productName || 'Product name not found';
+  } catch (error) {
+    console.error('Error scraping product:', error);
+    return 'Product name not found';
+  }
 }
 
 // Webhook endpoint for Telegram updates
@@ -43,31 +61,5 @@ app.post(`/webhook/${token}`, express.json(), async (req, res) => {
           return res.sendStatus(200);
         }
 
-        // Make request to AliExpress API
-        const response = await axios.get(`https://api.aliexpress.com/v2/product/get?app_key=${appKey}&product_id=${productId}&sign_method=sha256&sign=${appSecret}`);
-        
-        const productName = response.data?.product_name || 'Product name not found';
-        await bot.sendMessage(chatId, `Product Name: ${productName}`);
-      } catch (error) {
-        console.error('Error fetching product:', error);
-        await bot.sendMessage(chatId, 'Sorry, I could not fetch the product information. Please try again later.');
-      }
-    } else {
-      await bot.sendMessage(chatId, 'Please send me an AliExpress product link.');
-    }
-  } catch (error) {
-    console.error('Error processing message:', error);
-  }
-
-  res.sendStatus(200);
-});
-
-// Health check endpoint
-app.get('/', (req, res) => {
-  res.send('Bot is running!');
-});
-
-// Start the server
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+        // Try the API first
+        const apiResponse = await axios.get(`https://api.aliexpress.com/v2/product
